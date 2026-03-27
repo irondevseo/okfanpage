@@ -7,7 +7,7 @@ export function logAuthPhase(
   data: Record<string, unknown>,
 ): void {
   const line = `${PREFIX} ${phase} ${JSON.stringify(data)}`;
-  console.error(line);
+  // console.error(line);
 }
 
 /** Rút gọn body để log (không log cookie người dùng). */

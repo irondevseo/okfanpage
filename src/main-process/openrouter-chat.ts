@@ -1,4 +1,5 @@
 import axios from 'axios';
+import type { CompetitorPostCompact } from '../shared/competitor-analysis-types';
 import { getContentPromptText, getOpenRouterSecrets } from './settings-store';
 import {
   getRetryAfterMsFromAxiosError,
@@ -37,6 +38,75 @@ export function getRewriteCaptionConfigOrThrow(): RewriteCaptionConfig {
   };
 }
 
+/** Chỉ cần API key + model (không dùng prompt nội dung reup). */
+export function getOpenRouterApiConfigOrThrow(): { apiKey: string; model: string } {
+  const secrets = getOpenRouterSecrets();
+  if (!secrets?.apiKey) {
+    throw new Error('Chưa cấu hình OpenRouter (API key) trong Cài đặt.');
+  }
+  return { apiKey: secrets.apiKey, model: secrets.modelId };
+}
+
+export type CompetitorAnalyzeBundle = {
+  pageId: string;
+  pageName: string;
+  sourceUrl: string;
+  posts: CompetitorPostCompact[];
+};
+
+function shrinkPostForCompetitorPrompt(p: CompetitorPostCompact) {
+  return {
+    id: p.id,
+    t: p.t,
+    txt: p.txt.length > 4000 ? `${p.txt.slice(0, 4000)}…` : p.txt,
+    ...(p.txtTruncated ? { captionMeta: 'truncated_in_fetch' as const } : {}),
+    mediaTypes: p.mediaTypes,
+    hasPreviewImage: Boolean(p.primaryImageUrl),
+    comments: p.comments.slice(0, 25).map((c) =>
+      c.length > 350 ? `${c.slice(0, 350)}…` : c,
+    ),
+    cmtCount: p.cmtCount,
+  };
+}
+
+const COMPETITOR_ANALYSIS_SYSTEM = `Bạn là chuyên gia phân tích nội dung Fanpage Facebook (đối thủ). Dữ liệu là JSON đã rút gọn: mỗi bài có id, thời gian ISO (t), caption (txt), loại media (mediaTypes), có/không ảnh thumbnail (hasPreviewImage), mẫu comment và cmtCount (số comment Graph trả trong batch, có thể lớn hơn số comment text).
+
+Trả lời bằng tiếng Việt, Markdown rõ ràng:
+1. **Tổng quan** — phong cách & chủ đề chính; nếu nhiều page thì so sánh ngắn gọn.
+2. **Lịch đăng & nhịp độ** — khung giờ/ngày suy ra từ t, nhịp đăng tương đối.
+3. **Nội dung & hình ảnh** — video/ảnh/link (từ mediaTypes + hasPreviewImage), gợi ý trọng tâm sản xuất.
+4. **Khán giả qua comment** — tông cảm xúc, câu hỏi, tranh luận, nội dung rác/spam (nhận định thận trọng, không vu khống).
+5. **Khác biệt & cơ hội** — khoảng trống, góc nội dung có thể khai thác.
+6. **Gợi ý hành động** — 5 bullet cụ thể, khả thi.
+
+Không bịa số liệu không có trong JSON. Nếu dữ liệu mỏng, nêu rõ giới hạn.`;
+
+export async function competitorAnalyzeWithOpenRouter(
+  bundles: CompetitorAnalyzeBundle[],
+  options?: { userHint?: string; maxPostsPerPage?: number },
+): Promise<string> {
+  const cfg = getOpenRouterApiConfigOrThrow();
+  const maxPosts = Math.min(50, Math.max(1, options?.maxPostsPerPage ?? 25));
+  const slim = bundles.map((b) => ({
+    pageId: b.pageId,
+    pageName: b.pageName,
+    sourceUrl: b.sourceUrl,
+    posts: b.posts.slice(0, maxPosts).map(shrinkPostForCompetitorPrompt),
+  }));
+  const hint = options?.userHint?.trim();
+  const userContent = [
+    'Dữ liệu JSON (một dòng):',
+    JSON.stringify(slim),
+    hint ? `\nYêu cầu thêm từ người dùng:\n${hint}` : '',
+    '\nHãy phân tích theo hướng dẫn hệ thống.',
+  ].join('');
+  const messages: ChatMessage[] = [
+    { role: 'system', content: COMPETITOR_ANALYSIS_SYSTEM },
+    { role: 'user', content: userContent },
+  ];
+  return chatCompletion(cfg.apiKey, cfg.model, messages, 0.55);
+}
+
 export async function rewriteCaptionWithConfig(
   cfg: RewriteCaptionConfig,
   original: string,
@@ -61,6 +131,7 @@ async function chatCompletion(
   apiKey: string,
   model: string,
   messages: ChatMessage[],
+  temperature = 0.7,
 ): Promise<string> {
   return withRetry(
     async () => {
@@ -69,7 +140,7 @@ async function chatCompletion(
         error?: { message?: string };
       }>(
         'https://openrouter.ai/api/v1/chat/completions',
-        { model, messages, temperature: 0.7 },
+        { model, messages, temperature },
         {
           headers: {
             Authorization: `Bearer ${apiKey}`,

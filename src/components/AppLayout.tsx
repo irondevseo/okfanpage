@@ -5,8 +5,8 @@ export function AppLayout() {
   const { profile, logout } = useAuth();
 
   return (
-    <div className="flex min-h-full flex-col bg-slate-950">
-      <header className="flex items-center justify-between gap-4 border-b border-slate-800/80 bg-slate-900/40 px-4 py-3 backdrop-blur-sm">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-slate-950">
+      <header className="fixed inset-x-0 top-0 z-50 flex items-center justify-between gap-4 border-b border-slate-800/80 bg-slate-900/40 px-4 py-3 backdrop-blur-sm">
         <div className="flex items-center gap-6">
           <NavLink
             to="/"
@@ -47,6 +47,32 @@ export function AppLayout() {
               }
             >
               Reup video
+            </NavLink>
+            <NavLink
+              to="/downloader"
+              className={({ isActive }) =>
+                [
+                  'rounded-lg px-3 py-1.5 text-xs font-medium transition',
+                  isActive
+                    ? 'bg-slate-800 text-white'
+                    : 'text-slate-500 hover:bg-slate-800/50 hover:text-slate-300',
+                ].join(' ')
+              }
+            >
+              Tải video
+            </NavLink>
+            <NavLink
+              to="/competitor"
+              className={({ isActive }) =>
+                [
+                  'rounded-lg px-3 py-1.5 text-xs font-medium transition',
+                  isActive
+                    ? 'bg-slate-800 text-white'
+                    : 'text-slate-500 hover:bg-slate-800/50 hover:text-slate-300',
+                ].join(' ')
+              }
+            >
+              Đối thủ
             </NavLink>
             <NavLink
               to="/settings/api-ai"
@@ -94,7 +120,7 @@ export function AppLayout() {
           </div>
         )}
       </header>
-      <main className="flex min-h-0 min-w-0 flex-1 flex-col px-4 py-5 sm:px-5">
+      <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-4 pb-5 pt-[calc(var(--app-header-height)+1.25rem)] sm:px-5">
         <Outlet />
       </main>
     </div>

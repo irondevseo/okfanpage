@@ -11,7 +11,15 @@ import type {
   ListOpenRouterModelsResult,
   OpenRouterPublicSettings,
   OpenRouterSetPayload,
+  ReupRemixPublicSettings,
+  ReupRemixSetPayload,
 } from './shared/settings-types';
+import type {
+  CompetitorAnalyzePayload,
+  CompetitorAnalyzeResult,
+  CompetitorFetchPostsPayload,
+  CompetitorFetchPostsResult,
+} from './shared/competitor-analysis-types';
 import type {
   ReupFetchSourcesResult,
   ReupRewriteResult,
@@ -19,6 +27,12 @@ import type {
   ReupScheduleJobPayload,
   ReupScheduleProgressPayload,
 } from './shared/reup-types';
+import type {
+  VideoInfoItem,
+  DownloadProgressPayload,
+  DownloadRequest,
+  DownloadStartResult,
+} from './shared/downloader-types';
 
 contextBridge.exposeInMainWorld('electronAPI', {
   auth: {
@@ -53,10 +67,26 @@ contextBridge.exposeInMainWorld('electronAPI', {
       payload: ContentPromptSetPayload,
     ): Promise<ContentPromptPublicSettings> =>
       ipcRenderer.invoke('settings:setContentPrompt', payload),
+    getReupRemix: (): Promise<ReupRemixPublicSettings> =>
+      ipcRenderer.invoke('settings:getReupRemix'),
+    setReupRemix: (
+      payload: ReupRemixSetPayload,
+    ): Promise<ReupRemixPublicSettings> =>
+      ipcRenderer.invoke('settings:setReupRemix', payload),
+    pickLogoFile: (): Promise<string | null> =>
+      ipcRenderer.invoke('settings:pickLogoFile'),
   },
   openrouter: {
     listModels: (apiKey?: string): Promise<ListOpenRouterModelsResult> =>
       ipcRenderer.invoke('openrouter:listModels', apiKey),
+  },
+  competitor: {
+    fetchPosts: (
+      payload: CompetitorFetchPostsPayload,
+    ): Promise<CompetitorFetchPostsResult> =>
+      ipcRenderer.invoke('competitor:fetchPosts', payload),
+    analyze: (payload: CompetitorAnalyzePayload): Promise<CompetitorAnalyzeResult> =>
+      ipcRenderer.invoke('competitor:analyze', payload),
   },
   reup: {
     fetchSources: (text: string): Promise<ReupFetchSourcesResult> =>
@@ -76,6 +106,37 @@ contextBridge.exposeInMainWorld('electronAPI', {
       const handler = (
         _ev: Electron.IpcRendererEvent,
         payload: ReupScheduleProgressPayload,
+      ) => {
+        cb(payload);
+      };
+      ipcRenderer.on(channel, handler);
+      return () => {
+        ipcRenderer.removeListener(channel, handler);
+      };
+    },
+  },
+  downloader: {
+    checkYtDlp: (): Promise<{ ok: boolean; version?: string; message?: string }> =>
+      ipcRenderer.invoke('downloader:checkYtDlp'),
+    fetchInfo: (url: string): Promise<VideoInfoItem> =>
+      ipcRenderer.invoke('downloader:fetchInfo', url),
+    startDownload: (req: DownloadRequest): Promise<DownloadStartResult> =>
+      ipcRenderer.invoke('downloader:startDownload', req),
+    cancel: (id: string): Promise<boolean> =>
+      ipcRenderer.invoke('downloader:cancel', id),
+    pickOutputDir: (): Promise<string | null> =>
+      ipcRenderer.invoke('downloader:pickOutputDir'),
+    getOutputDir: (): Promise<string> =>
+      ipcRenderer.invoke('downloader:getOutputDir'),
+    openOutputDir: (): Promise<void> =>
+      ipcRenderer.invoke('downloader:openOutputDir'),
+    onProgress: (
+      cb: (payload: DownloadProgressPayload) => void,
+    ): (() => void) => {
+      const channel = 'downloader:progress';
+      const handler = (
+        _ev: Electron.IpcRendererEvent,
+        payload: DownloadProgressPayload,
       ) => {
         cb(payload);
       };

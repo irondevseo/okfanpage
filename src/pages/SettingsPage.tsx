@@ -11,12 +11,17 @@ const categories: { to: string; label: string; hint: string }[] = [
     label: 'Prompt nội dung',
     hint: 'Viết lại caption khi reup',
   },
+  {
+    to: '/settings/reup-remix',
+    label: 'Remix video (FFmpeg)',
+    hint: 'Tải về, xử lý, upload file',
+  },
 ];
 
 export function SettingsPage() {
   return (
-    <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col gap-8 lg:flex-row lg:gap-10">
-      <aside className="shrink-0 lg:w-56">
+    <div className="flex h-full min-h-0 w-full min-w-0 flex-1 flex-col gap-8 overflow-hidden lg:flex-row lg:gap-10">
+      <aside className="shrink-0 overflow-hidden lg:w-56">
         <h1 className="text-2xl font-semibold tracking-tight text-white">
           Cài đặt
         </h1>
@@ -46,7 +51,7 @@ export function SettingsPage() {
         </nav>
       </aside>
 
-      <div className="min-h-0 min-w-0 flex-1 rounded-2xl border border-slate-800/80 bg-slate-900/30 p-6 sm:p-8">
+      <div className="min-h-0 min-w-0 flex-1 overflow-y-auto rounded-2xl border border-slate-800/80 bg-slate-900/30 p-6 sm:p-8">
         <Outlet />
       </div>
     </div>

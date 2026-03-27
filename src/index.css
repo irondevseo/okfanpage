@@ -5,6 +5,10 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    --app-header-height: 4.25rem;
+  }
+
   html,
   body,
   #root {

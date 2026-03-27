@@ -9,6 +9,9 @@ export const REUP_OPENROUTER_CONCURRENCY = 6;
 /** Số POST /{page-id}/videos đồng thời (an toàn hơn OpenRouter). */
 export const REUP_GRAPH_VIDEO_CONCURRENCY = 5;
 
+/** Khi bật remix (tải + FFmpeg + upload file) — giảm song songh để tránh treo máy. */
+export const REUP_GRAPH_REMIX_CONCURRENCY = 2;
+
 /** Số lần thử lại tối đa (gồm lần đầu). */
 export const REUP_HTTP_MAX_ATTEMPTS = 6;
 

@@ -1,17 +1,21 @@
-import { ipcMain } from 'electron';
+import { BrowserWindow, dialog, ipcMain } from 'electron';
 import type {
   ContentPromptPublicSettings,
   ContentPromptSetPayload,
   ListOpenRouterModelsResult,
   OpenRouterPublicSettings,
   OpenRouterSetPayload,
+  ReupRemixPublicSettings,
+  ReupRemixSetPayload,
 } from '../shared/settings-types';
 import { fetchOpenRouterModels } from './openrouter-api';
 import {
   getContentPromptPublic,
   getOpenRouterPublic,
+  getReupRemixSettings,
   setContentPrompt,
   setOpenRouter,
+  setReupRemix,
 } from './settings-store';
 
 export function registerSettingsIpc(): void {
@@ -49,6 +53,47 @@ export function registerSettingsIpc(): void {
     ): Promise<ContentPromptPublicSettings> => {
       setContentPrompt(payload);
       return getContentPromptPublic();
+    },
+  );
+
+  ipcMain.handle(
+    'settings:getReupRemix',
+    async (): Promise<ReupRemixPublicSettings> => {
+      return getReupRemixSettings();
+    },
+  );
+
+  ipcMain.handle(
+    'settings:setReupRemix',
+    async (
+      _e,
+      payload: ReupRemixSetPayload,
+    ): Promise<ReupRemixPublicSettings> => {
+      return setReupRemix(payload);
+    },
+  );
+
+  ipcMain.handle(
+    'settings:pickLogoFile',
+    async (e): Promise<string | null> => {
+      const win = BrowserWindow.fromWebContents(e.sender);
+      const { canceled, filePaths } = await dialog.showOpenDialog(
+        win ?? undefined,
+        {
+          title: 'Chọn ảnh logo (PNG khuyến nghị)',
+          filters: [
+            {
+              name: 'Ảnh',
+              extensions: ['png', 'jpg', 'jpeg', 'webp'],
+            },
+          ],
+          properties: ['openFile'],
+        },
+      );
+      if (canceled || !filePaths[0]) {
+        return null;
+      }
+      return filePaths[0];
     },
   );
 

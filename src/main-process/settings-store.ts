@@ -1,8 +1,13 @@
 import type {
   ContentPromptPublicSettings,
   ContentPromptSetPayload,
+  ReupRemixPublicSettings,
+  ReupRemixSetPayload,
 } from '../shared/settings-types';
-import { DEFAULT_OPENROUTER_MODEL_ID } from '../shared/settings-types';
+import {
+  DEFAULT_OPENROUTER_MODEL_ID,
+  DEFAULT_REUP_REMIX_SETTINGS,
+} from '../shared/settings-types';
 import { createTypedStore } from './typed-store';
 
 type OpenRouterStored = {
@@ -13,6 +18,7 @@ type OpenRouterStored = {
 type SettingsSchema = {
   openRouter?: OpenRouterStored;
   contentPrompt?: string;
+  reupRemix?: Partial<ReupRemixPublicSettings>;
 };
 
 const store = createTypedStore<SettingsSchema>({
@@ -96,4 +102,18 @@ export function setContentPrompt(payload: ContentPromptSetPayload): void {
   if (typeof payload.prompt === 'string') {
     store.set('contentPrompt', payload.prompt);
   }
+}
+
+export function getReupRemixSettings(): ReupRemixPublicSettings {
+  const raw = store.get('reupRemix');
+  const patch =
+    raw && typeof raw === 'object' ? (raw as Partial<ReupRemixPublicSettings>) : {};
+  return { ...DEFAULT_REUP_REMIX_SETTINGS, ...patch };
+}
+
+export function setReupRemix(payload: ReupRemixSetPayload): ReupRemixPublicSettings {
+  const cur = getReupRemixSettings();
+  const next: ReupRemixPublicSettings = { ...cur, ...payload };
+  store.set('reupRemix', next);
+  return next;
 }

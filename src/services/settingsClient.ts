@@ -4,6 +4,8 @@ import type {
   ListOpenRouterModelsResult,
   OpenRouterPublicSettings,
   OpenRouterSetPayload,
+  ReupRemixPublicSettings,
+  ReupRemixSetPayload,
 } from '../shared/settings-types';
 
 function api() {
@@ -37,4 +39,18 @@ export async function settingsSetContentPrompt(
   payload: ContentPromptSetPayload,
 ): Promise<ContentPromptPublicSettings> {
   return api().settings.setContentPrompt(payload);
+}
+
+export async function settingsGetReupRemix(): Promise<ReupRemixPublicSettings> {
+  return api().settings.getReupRemix();
+}
+
+export async function settingsSetReupRemix(
+  payload: ReupRemixSetPayload,
+): Promise<ReupRemixPublicSettings> {
+  return api().settings.setReupRemix(payload);
+}
+
+export async function settingsPickLogoFile(): Promise<string | null> {
+  return api().settings.pickLogoFile();
 }
