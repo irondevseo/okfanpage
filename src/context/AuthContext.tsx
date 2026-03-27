@@ -40,7 +40,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setBootMessage(null);
     setCanRetryWithStoredCookies(false);
     const r = await authRestore();
-    if (r.ok) {
+    if (r.ok === true) {
       setProfile(r.profile);
       return;
     }
@@ -71,7 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
       const r = await authValidate();
-      if (r.ok) {
+      if (r.ok === true) {
         setProfile(r.profile);
         return;
       }
@@ -87,7 +87,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback(
     async (cookies: string) => {
       const r = await authLogin(cookies);
-      if (r.ok) {
+      if (r.ok === true) {
         setProfile(r.profile);
         setBootMessage(null);
         setCanRetryWithStoredCookies(false);

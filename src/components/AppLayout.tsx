@@ -36,6 +36,19 @@ export function AppLayout() {
               Trang chủ
             </NavLink>
             <NavLink
+              to="/reup"
+              className={({ isActive }) =>
+                [
+                  'rounded-lg px-3 py-1.5 text-xs font-medium transition',
+                  isActive
+                    ? 'bg-slate-800 text-white'
+                    : 'text-slate-500 hover:bg-slate-800/50 hover:text-slate-300',
+                ].join(' ')
+              }
+            >
+              Reup video
+            </NavLink>
+            <NavLink
               to="/settings/api-ai"
               className={({ isActive }) =>
                 [

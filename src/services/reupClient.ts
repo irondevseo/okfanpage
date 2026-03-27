@@ -3,6 +3,7 @@ import type {
   ReupRewriteResult,
   ReupScheduleBatchResult,
   ReupScheduleJobPayload,
+  ReupScheduleProgressPayload,
 } from '../shared/reup-types';
 
 function api() {
@@ -26,4 +27,11 @@ export async function reupScheduleVideos(
   jobs: ReupScheduleJobPayload[],
 ): Promise<ReupScheduleBatchResult> {
   return api().reup.scheduleVideos(jobs);
+}
+
+/** Đăng ký nhận tiến độ realtime khi `reupScheduleVideos` đang chạy; gọi hàm trả về để hủy. */
+export function subscribeReupScheduleProgress(
+  onProgress: (payload: ReupScheduleProgressPayload) => void,
+): () => void {
+  return api().reup.onScheduleProgress(onProgress);
 }

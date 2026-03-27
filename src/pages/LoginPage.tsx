@@ -38,7 +38,7 @@ export function LoginPage() {
     setSubmitting(true);
     try {
       const r = await login(cookieInput);
-      if (!r.ok) {
+      if (r.ok === false) {
         setError(r.message);
         return;
       }

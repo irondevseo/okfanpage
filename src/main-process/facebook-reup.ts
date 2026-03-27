@@ -1,11 +1,19 @@
 import axios from 'axios';
 import { parseFacebookPageUrlsBlock } from '../helpers/facebookPageLinks';
-import type {
-  ReupFetchPageResult,
-  ReupFetchSourcesResult,
-  ReupVideoDTO,
-} from '../shared/reup-types';
+import type { ReupFetchPageResult, ReupVideoDTO } from '../shared/reup-types';
 import { logAuthPhase, previewText } from './auth-logger';
+import {
+  getRetryAfterMsFromAxiosError,
+  isRetryableAxiosError,
+  isRetryableHttpStatus,
+  TransientRequestError,
+  withRetry,
+} from './http-retry';
+import {
+  REUP_HTTP_MAX_ATTEMPTS,
+  REUP_HTTP_RETRY_BASE_MS,
+  REUP_HTTP_RETRY_MAX_MS,
+} from './reup-batch-config';
 
 const GRAPH_VERSION = 'v21.0';
 
@@ -16,6 +24,48 @@ const VIDEO_FIELDS_FALLBACK =
   'id,description,source,permalink_url,thumbnails{uri,is_preferred},picture,length,created_time';
 
 type GraphErr = { error?: { message?: string; code?: number } };
+
+function graphRateLimitRetry(
+  status: number,
+  data: GraphErr & { id?: string },
+): boolean {
+  if (status === 429) {
+    return true;
+  }
+  const c = data?.error?.code;
+  if (typeof c !== 'number') {
+    return false;
+  }
+  /** Application / user / Page limit, custom throttle — Graph docs & thực tế hay gặp. */
+  return c === 4 || c === 17 || c === 32 || c === 613;
+}
+
+function retryAfterMsFromGraphHeaders(
+  headers: Record<string, unknown> | undefined,
+): number | undefined {
+  if (!headers) {
+    return undefined;
+  }
+  const raw =
+    headers['retry-after'] ??
+    headers['Retry-After'] ??
+    (typeof (headers as { get?: (k: string) => string }).get === 'function'
+      ? (headers as { get: (k: string) => string }).get('retry-after')
+      : undefined);
+  if (raw == null) {
+    return undefined;
+  }
+  const s = String(raw).trim();
+  const sec = Number(s);
+  if (Number.isFinite(sec) && sec > 0) {
+    return sec * 1000;
+  }
+  const until = Date.parse(s);
+  if (!Number.isNaN(until)) {
+    return Math.max(0, until - Date.now());
+  }
+  return undefined;
+}
 
 function graphHeaders(cookies: string): Record<string, string> {
   return cookies ? { Cookie: cookies } : {};
@@ -172,6 +222,23 @@ export async function fetchReupSourcesFromUrlBlock(
   return { ok: true, results };
 }
 
+function maskToken(t: string): string {
+  const s = t.trim();
+  if (s.length <= 12) {
+    return '(ngắn)';
+  }
+  return `${s.slice(0, 8)}…${s.slice(-4)}`;
+}
+
+/**
+ * Đăng video lên Page (hẹn giờ). Graph: POST /{page-id}/videos
+ * @see https://developers.facebook.com/docs/graph-api/reference/page/videos
+ */
+export type PostScheduledPageVideoOptions = {
+  /** Batch lớn: bớt log từng request để giảm I/O. */
+  compactLog?: boolean;
+};
+
 export async function postScheduledPageVideo(
   targetPageId: string,
   pageAccessToken: string,
@@ -179,25 +246,100 @@ export async function postScheduledPageVideo(
   description: string,
   scheduledPublishTime: number,
   cookies: string,
+  options?: PostScheduledPageVideoOptions,
 ): Promise<{ id?: string }> {
-  const url = `https://graph.facebook.com/${GRAPH_VERSION}/${targetPageId}/videos`;
-  const body = new URLSearchParams({
-    file_url: fileUrl,
-    description,
-    published: 'false',
-    scheduled_publish_time: String(scheduledPublishTime),
-    access_token: pageAccessToken,
-  });
-  const { data } = await axios.post<GraphErr & { id?: string }>(url, body.toString(), {
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      ...graphHeaders(cookies),
-    },
-    validateStatus: () => true,
-    timeout: 120_000,
-  });
-  if (data.error?.message) {
-    throw new Error(data.error.message);
+  const compact = options?.compactLog ?? false;
+
+  if (!compact) {
+    logAuthPhase('reup-post-video-start', {
+      targetPageId,
+      graphPath: `/${GRAPH_VERSION}/${targetPageId}/videos`,
+      scheduledPublishTime: Math.floor(scheduledPublishTime),
+      fileUrlLength: fileUrl.length,
+      fileUrlPreview: previewText(fileUrl, 120),
+      descriptionLength: (description ?? '').length,
+      hasCookieHeader: Boolean(cookies?.trim()),
+      accessTokenMask: maskToken(pageAccessToken),
+    });
   }
-  return { id: data.id };
+
+  return withRetry(
+    async () => {
+      const url = `https://graph.facebook.com/${GRAPH_VERSION}/${targetPageId}/videos`;
+      const body = new URLSearchParams({
+        file_url: fileUrl,
+        description: description ?? '',
+        published: 'false',
+        scheduled_publish_time: String(Math.floor(scheduledPublishTime)),
+        access_token: pageAccessToken,
+      });
+
+      const res = await axios.post<GraphErr & { id?: string }>(url, body.toString(), {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+          ...graphHeaders(cookies),
+        },
+        validateStatus: () => true,
+        timeout: 120_000,
+        maxBodyLength: Infinity,
+        maxContentLength: Infinity,
+      });
+
+      const data = res.data;
+      const hdrs = res.headers as Record<string, unknown>;
+
+      if (!compact) {
+        logAuthPhase('reup-post-video-http', {
+          httpStatus: res.status,
+          hasId: Boolean(data?.id),
+          videoId: data?.id ?? null,
+          graphError: data?.error ?? null,
+          rawPreview:
+            typeof data === 'object' && data !== null
+              ? previewText(JSON.stringify(data), 500)
+              : String(data),
+        });
+      }
+
+      if (isRetryableHttpStatus(res.status) || graphRateLimitRetry(res.status, data)) {
+        const ra = retryAfterMsFromGraphHeaders(hdrs);
+        throw new TransientRequestError(
+          data?.error?.message ?? `Graph HTTP ${res.status} (rate / tạm thời)`,
+          { httpStatus: res.status, retryAfterMs: ra },
+        );
+      }
+
+      if (res.status >= 400) {
+        const msg =
+          data?.error?.message ??
+          `HTTP ${res.status} khi POST /videos`;
+        throw new Error(msg);
+      }
+
+      if (data?.error?.message) {
+        throw new Error(
+          `${data.error.message}${data.error.code != null ? ` (code ${data.error.code})` : ''}`,
+        );
+      }
+
+      if (!data?.id) {
+        throw new Error(
+          'Graph không trả id video — kiểm tra quyền page token và tham số hẹn giờ.',
+        );
+      }
+
+      if (!compact) {
+        logAuthPhase('reup-post-video-success', { videoId: data.id });
+      }
+      return { id: data.id };
+    },
+    {
+      maxAttempts: REUP_HTTP_MAX_ATTEMPTS,
+      baseDelayMs: REUP_HTTP_RETRY_BASE_MS,
+      maxDelayMs: REUP_HTTP_RETRY_MAX_MS,
+      isRetryable: (e) =>
+        e instanceof TransientRequestError || isRetryableAxiosError(e),
+      getRetryAfterMs: getRetryAfterMsFromAxiosError,
+    },
+  );
 }

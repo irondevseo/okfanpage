@@ -13,6 +13,7 @@ import type {
   ReupRewriteResult,
   ReupScheduleBatchResult,
   ReupScheduleJobPayload,
+  ReupScheduleProgressPayload,
 } from './shared/reup-types';
 
 contextBridge.exposeInMainWorld('electronAPI', {
@@ -58,5 +59,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
       jobs: ReupScheduleJobPayload[],
     ): Promise<ReupScheduleBatchResult> =>
       ipcRenderer.invoke('reup:scheduleVideos', jobs),
+    onScheduleProgress: (
+      cb: (payload: ReupScheduleProgressPayload) => void,
+    ): (() => void) => {
+      const channel = 'reup:scheduleProgress';
+      const handler = (
+        _ev: Electron.IpcRendererEvent,
+        payload: ReupScheduleProgressPayload,
+      ) => {
+        cb(payload);
+      };
+      ipcRenderer.on(channel, handler);
+      return () => {
+        ipcRenderer.removeListener(channel, handler);
+      };
+    },
   },
 });

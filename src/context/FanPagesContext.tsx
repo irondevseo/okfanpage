@@ -52,7 +52,7 @@ export function FanPagesProvider({ children }: { children: ReactNode }) {
       setLoadStatus('loading');
       setError(null);
       const r = await facebookListManagedPages();
-      if (!r.ok) {
+      if (r.ok === false) {
         setLoadStatus('error');
         setError(r.message ?? 'Không tải được danh sách Fanpage.');
         return;

@@ -114,6 +114,7 @@ export async function fetchManagedFanPagesWithFallback(
         fields: PAGE_FIELDS_MINIMAL,
         limit: 100,
       },
+      headers: { Cookie: cookies },
       validateStatus: () => true,
       timeout: 60_000,
     });

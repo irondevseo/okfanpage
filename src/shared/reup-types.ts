@@ -32,8 +32,15 @@ export type ReupFetchSourcesResult =
 
 export type ReupRewriteItem = { key: string; text: string };
 
+export type ReupRewriteFailedItem = { key: string; message: string };
+
 export type ReupRewriteResult =
-  | { ok: true; items: { key: string; text: string }[] }
+  | {
+      ok: true;
+      items: { key: string; text: string }[];
+      /** Caption lỗi sau khi chạy song songh — phần `items` vẫn áp dụng được. */
+      failed?: ReupRewriteFailedItem[];
+    }
   | { ok: false; message: string };
 
 export type ReupScheduleJobPayload = {
@@ -61,4 +68,18 @@ export type ReupScheduleJobErr = {
 
 export type ReupScheduleBatchResult = {
   jobs: (ReupScheduleJobOk | ReupScheduleJobErr)[];
+};
+
+/** Main → renderer trong lúc `reup:scheduleVideos` chạy. */
+export type ReupScheduleProgressPayload = {
+  completed: number;
+  total: number;
+  successCount: number;
+  failCount: number;
+  /** Job vừa xong — thiếu khi gói `started` (completed === 0). */
+  videoKey?: string;
+  targetPageId?: string;
+  ok?: boolean;
+  postId?: string;
+  message?: string;
 };

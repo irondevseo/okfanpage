@@ -5,6 +5,7 @@ import type {
   ReupRewriteResult,
   ReupScheduleBatchResult,
   ReupScheduleJobPayload,
+  ReupScheduleProgressPayload,
 } from './shared/reup-types';
 import type {
   ContentPromptPublicSettings,
@@ -48,6 +49,9 @@ declare global {
         scheduleVideos: (
           jobs: ReupScheduleJobPayload[],
         ) => Promise<ReupScheduleBatchResult>;
+        onScheduleProgress: (
+          cb: (payload: ReupScheduleProgressPayload) => void,
+        ) => () => void;
       };
     };
   }

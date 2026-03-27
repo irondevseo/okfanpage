@@ -20,7 +20,7 @@ export function useFacebookRequestHeaders() {
       throw new Error('Chưa đăng nhập Facebook trong app.');
     }
     const r = await authGetFacebookRequestAuth();
-    if (!r.ok) {
+    if (r.ok === false) {
       const fallback =
         r.code === 'NO_COOKIE'
           ? 'Chưa có cookie đăng nhập.'

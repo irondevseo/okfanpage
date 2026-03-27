@@ -6,6 +6,11 @@ const categories: { to: string; label: string; hint: string }[] = [
     label: 'API AI',
     hint: 'OpenRouter — model & API key',
   },
+  {
+    to: '/settings/prompt-content',
+    label: 'Prompt nội dung',
+    hint: 'Viết lại caption khi reup',
+  },
 ];
 
 export function SettingsPage() {
