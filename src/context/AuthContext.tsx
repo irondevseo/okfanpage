@@ -12,6 +12,7 @@ import {
   authLogin,
   authLogout,
   authRestore,
+  authSwitchVia,
   authValidate,
 } from '../services/authClient';
 
@@ -23,6 +24,10 @@ type AuthContextValue = {
   bootMessage: string | null;
   canRetryWithStoredCookies: boolean;
   login: (cookies: string) => Promise<{ ok: true } | { ok: false; message: string }>;
+  /** Đăng nhập bằng via đã lưu (cookie còn hiệu lực). */
+  switchVia: (
+    viaId: string,
+  ) => Promise<{ ok: true } | { ok: false; message: string }>;
   logout: () => Promise<void>;
   retryRestore: () => Promise<void>;
 };
@@ -107,6 +112,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  const switchVia = useCallback(async (viaId: string) => {
+    const r = await authSwitchVia(viaId.trim());
+    if (r.ok === true) {
+      setProfile(r.profile);
+      setBootMessage(null);
+      setCanRetryWithStoredCookies(false);
+      return { ok: true as const };
+    }
+    if (r.code === 'NETWORK') {
+      return {
+        ok: false as const,
+        message: r.message ?? 'Lỗi mạng. Thử lại sau.',
+      };
+    }
+    return {
+      ok: false as const,
+      message: r.message ?? 'Không đăng nhập được via này.',
+    };
+  }, []);
+
   const logout = useCallback(async () => {
     await authLogout();
     setProfile(null);
@@ -130,6 +155,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       bootMessage,
       canRetryWithStoredCookies,
       login,
+      switchVia,
       logout,
       retryRestore,
     }),
@@ -139,6 +165,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       bootMessage,
       canRetryWithStoredCookies,
       login,
+      switchVia,
       logout,
       retryRestore,
     ],
