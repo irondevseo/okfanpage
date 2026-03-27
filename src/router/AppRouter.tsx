@@ -5,6 +5,7 @@ import { ReupRemixSettingsPanel } from '../components/settings/ReupRemixSettings
 import { AppLayout } from '../components/AppLayout';
 import { RequireAuth } from '../components/RequireAuth';
 import { CompetitorAnalysisPage } from '../pages/CompetitorAnalysisPage';
+import { DownloaderPage } from '../pages/DownloaderPage';
 import { HomePage } from '../pages/HomePage';
 import { LoginPage } from '../pages/LoginPage';
 import { ReupContentPage } from '../pages/ReupContentPage';
@@ -19,6 +20,7 @@ export function AppRouter() {
           <Route element={<AppLayout />}>
             <Route path="/" element={<HomePage />} />
             <Route path="/reup" element={<ReupContentPage />} />
+            <Route path="/downloader" element={<DownloaderPage />} />
             <Route path="/competitor" element={<CompetitorAnalysisPage />} />
             <Route path="/settings" element={<SettingsPage />}>
               <Route index element={<Navigate to="api-ai" replace />} />

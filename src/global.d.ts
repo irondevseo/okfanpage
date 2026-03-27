@@ -18,6 +18,12 @@ import type {
   ReupScheduleProgressPayload,
 } from './shared/reup-types';
 import type {
+  VideoInfoItem,
+  DownloadProgressPayload,
+  DownloadRequest,
+  DownloadStartResult,
+} from './shared/downloader-types';
+import type {
   ContentPromptPublicSettings,
   ContentPromptSetPayload,
   ListOpenRouterModelsResult,
@@ -77,6 +83,18 @@ declare global {
         ) => Promise<ReupScheduleBatchResult>;
         onScheduleProgress: (
           cb: (payload: ReupScheduleProgressPayload) => void,
+        ) => () => void;
+      };
+      downloader: {
+        checkYtDlp: () => Promise<{ ok: boolean; version?: string; message?: string }>;
+        fetchInfo: (url: string) => Promise<VideoInfoItem>;
+        startDownload: (req: DownloadRequest) => Promise<DownloadStartResult>;
+        cancel: (id: string) => Promise<boolean>;
+        pickOutputDir: () => Promise<string | null>;
+        getOutputDir: () => Promise<string>;
+        openOutputDir: () => Promise<void>;
+        onProgress: (
+          cb: (payload: DownloadProgressPayload) => void,
         ) => () => void;
       };
     };

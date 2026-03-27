@@ -27,6 +27,12 @@ import type {
   ReupScheduleJobPayload,
   ReupScheduleProgressPayload,
 } from './shared/reup-types';
+import type {
+  VideoInfoItem,
+  DownloadProgressPayload,
+  DownloadRequest,
+  DownloadStartResult,
+} from './shared/downloader-types';
 
 contextBridge.exposeInMainWorld('electronAPI', {
   auth: {
@@ -100,6 +106,37 @@ contextBridge.exposeInMainWorld('electronAPI', {
       const handler = (
         _ev: Electron.IpcRendererEvent,
         payload: ReupScheduleProgressPayload,
+      ) => {
+        cb(payload);
+      };
+      ipcRenderer.on(channel, handler);
+      return () => {
+        ipcRenderer.removeListener(channel, handler);
+      };
+    },
+  },
+  downloader: {
+    checkYtDlp: (): Promise<{ ok: boolean; version?: string; message?: string }> =>
+      ipcRenderer.invoke('downloader:checkYtDlp'),
+    fetchInfo: (url: string): Promise<VideoInfoItem> =>
+      ipcRenderer.invoke('downloader:fetchInfo', url),
+    startDownload: (req: DownloadRequest): Promise<DownloadStartResult> =>
+      ipcRenderer.invoke('downloader:startDownload', req),
+    cancel: (id: string): Promise<boolean> =>
+      ipcRenderer.invoke('downloader:cancel', id),
+    pickOutputDir: (): Promise<string | null> =>
+      ipcRenderer.invoke('downloader:pickOutputDir'),
+    getOutputDir: (): Promise<string> =>
+      ipcRenderer.invoke('downloader:getOutputDir'),
+    openOutputDir: (): Promise<void> =>
+      ipcRenderer.invoke('downloader:openOutputDir'),
+    onProgress: (
+      cb: (payload: DownloadProgressPayload) => void,
+    ): (() => void) => {
+      const channel = 'downloader:progress';
+      const handler = (
+        _ev: Electron.IpcRendererEvent,
+        payload: DownloadProgressPayload,
       ) => {
         cb(payload);
       };
