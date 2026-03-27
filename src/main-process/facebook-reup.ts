@@ -1,4 +1,6 @@
+import { createReadStream } from 'node:fs';
 import axios from 'axios';
+import FormData from 'form-data';
 import { parseFacebookPageUrlsBlock } from '../helpers/facebookPageLinks';
 import type { ReupFetchPageResult, ReupVideoDTO } from '../shared/reup-types';
 import { logAuthPhase, previewText } from './auth-logger';
@@ -330,6 +332,117 @@ export async function postScheduledPageVideo(
 
       if (!compact) {
         logAuthPhase('reup-post-video-success', { videoId: data.id });
+      }
+      return { id: data.id };
+    },
+    {
+      maxAttempts: REUP_HTTP_MAX_ATTEMPTS,
+      baseDelayMs: REUP_HTTP_RETRY_BASE_MS,
+      maxDelayMs: REUP_HTTP_RETRY_MAX_MS,
+      isRetryable: (e) =>
+        e instanceof TransientRequestError || isRetryableAxiosError(e),
+      getRetryAfterMs: getRetryAfterMsFromAxiosError,
+    },
+  );
+}
+
+/**
+ * Đăng video hẹn giờ bằng file local (multipart `source`).
+ * Khác với `postScheduledPageVideo` (file_url) — dùng sau pipeline remix FFmpeg.
+ */
+export async function postScheduledPageVideoFromFile(
+  targetPageId: string,
+  pageAccessToken: string,
+  filePath: string,
+  description: string,
+  scheduledPublishTime: number,
+  cookies: string,
+  options?: PostScheduledPageVideoOptions,
+): Promise<{ id?: string }> {
+  const compact = options?.compactLog ?? false;
+
+  if (!compact) {
+    logAuthPhase('reup-post-video-file-start', {
+      targetPageId,
+      graphPath: `/${GRAPH_VERSION}/${targetPageId}/videos`,
+      scheduledPublishTime: Math.floor(scheduledPublishTime),
+      filePath,
+      descriptionLength: (description ?? '').length,
+      hasCookieHeader: Boolean(cookies?.trim()),
+      accessTokenMask: maskToken(pageAccessToken),
+    });
+  }
+
+  const url = `https://graph.facebook.com/${GRAPH_VERSION}/${targetPageId}/videos`;
+
+  return withRetry(
+    async () => {
+      const form = new FormData();
+      form.append('source', createReadStream(filePath));
+      form.append('description', description ?? '');
+      form.append('published', 'false');
+      form.append(
+        'scheduled_publish_time',
+        String(Math.floor(scheduledPublishTime)),
+      );
+      form.append('access_token', pageAccessToken);
+
+      const res = await axios.post<GraphErr & { id?: string }>(url, form, {
+        headers: {
+          ...form.getHeaders(),
+          ...graphHeaders(cookies),
+        },
+        validateStatus: () => true,
+        timeout: 600_000,
+        maxBodyLength: Infinity,
+        maxContentLength: Infinity,
+      });
+
+      const data = res.data;
+      const hdrs = res.headers as Record<string, unknown>;
+
+      if (!compact) {
+        logAuthPhase('reup-post-video-file-http', {
+          httpStatus: res.status,
+          hasId: Boolean(data?.id),
+          videoId: data?.id ?? null,
+          graphError: data?.error ?? null,
+          rawPreview:
+            typeof data === 'object' && data !== null
+              ? previewText(JSON.stringify(data), 500)
+              : String(data),
+        });
+      }
+
+      if (isRetryableHttpStatus(res.status) || graphRateLimitRetry(res.status, data)) {
+        const ra = retryAfterMsFromGraphHeaders(hdrs);
+        throw new TransientRequestError(
+          data?.error?.message ?? `Graph HTTP ${res.status} (rate / tạm thời)`,
+          { httpStatus: res.status, retryAfterMs: ra },
+        );
+      }
+
+      if (res.status >= 400) {
+        const msg =
+          data?.error?.message ??
+          `HTTP ${res.status} khi POST /videos (multipart)`;
+        throw new Error(msg);
+      }
+
+      if (data?.error?.message) {
+        throw new Error(
+          `${data.error.message}${data.error.code != null ? ` (code ${data.error.code})` : ''}`,
+        );
+      }
+
+      if (!data?.id) {
+        throw new Error(
+          'Graph không trả id video — kiểm tra quyền page token và tham số hẹn giờ.',
+        );
+      }
+
+      if (!compact) {
+        logAuthPhase('reup-post-video-file-success', { videoId: data.id });
       }
       return { id: data.id };
     },

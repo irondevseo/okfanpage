@@ -1,4 +1,7 @@
-import { ipcMain } from 'electron';
+import { randomUUID } from 'node:crypto';
+import { mkdirSync, unlinkSync } from 'node:fs';
+import path from 'node:path';
+import { app, ipcMain } from 'electron';
 import type {
   ReupFetchSourcesResult,
   ReupRewriteResult,
@@ -17,16 +20,21 @@ import {
 import {
   fetchReupSourcesFromUrlBlock,
   postScheduledPageVideo,
+  postScheduledPageVideoFromFile,
 } from './facebook-reup';
 import {
   getRewriteCaptionConfigOrThrow,
   rewriteCaptionWithConfig,
 } from './openrouter-chat';
 import {
+  REUP_GRAPH_REMIX_CONCURRENCY,
   REUP_GRAPH_VIDEO_CONCURRENCY,
   REUP_OPENROUTER_CONCURRENCY,
   REUP_SCHEDULE_PROGRESS_EVERY,
 } from './reup-batch-config';
+import { downloadVideoToFile } from './reup-download';
+import { remixVideoWithFfmpeg } from './reup-ffmpeg-remix';
+import { getReupRemixSettings } from './settings-store';
 
 export function registerReupIpc(): void {
   ipcMain.handle(
@@ -143,9 +151,16 @@ export function registerReupIpc(): void {
       }
 
       const total = jobs.length;
+      const remixCfg = getReupRemixSettings();
+      const remixOn = remixCfg.enabled;
+      const poolSize = remixOn
+        ? REUP_GRAPH_REMIX_CONCURRENCY
+        : REUP_GRAPH_VIDEO_CONCURRENCY;
+
       logAuthPhase('reup-schedule-batch-start', {
         total,
-        concurrency: REUP_GRAPH_VIDEO_CONCURRENCY,
+        concurrency: poolSize,
+        remixPipeline: remixOn,
       });
 
       let completed = 0;
@@ -166,7 +181,7 @@ export function registerReupIpc(): void {
         failCount: 0,
       });
 
-      const rows = await runPool(jobs, REUP_GRAPH_VIDEO_CONCURRENCY, async (job) => {
+      const rows = await runPool(jobs, poolSize, async (job) => {
         let row:
           | {
               ok: true;
@@ -189,6 +204,46 @@ export function registerReupIpc(): void {
               targetPageId: job.targetPageId,
               message: 'Thiếu URL file video (source).',
             };
+          } else if (remixOn) {
+            const workDir = path.join(app.getPath('temp'), 'okfanpage-reup');
+            mkdirSync(workDir, { recursive: true });
+            const id = randomUUID();
+            const rawPath = path.join(workDir, `${id}-src.mp4`);
+            const outPath = path.join(workDir, `${id}-remix.mp4`);
+            try {
+              await downloadVideoToFile(
+                job.fileUrl.trim(),
+                rawPath,
+                cookies,
+              );
+              await remixVideoWithFfmpeg(rawPath, outPath, remixCfg);
+              const res = await postScheduledPageVideoFromFile(
+                job.targetPageId,
+                job.pageAccessToken,
+                outPath,
+                job.description ?? '',
+                job.scheduledPublishTime,
+                cookies,
+                { compactLog: true },
+              );
+              row = {
+                ok: true,
+                videoKey: job.videoKey,
+                targetPageId: job.targetPageId,
+                postId: res.id,
+              };
+            } finally {
+              try {
+                unlinkSync(rawPath);
+              } catch {
+                /* ignore */
+              }
+              try {
+                unlinkSync(outPath);
+              } catch {
+                /* ignore */
+              }
+            }
           } else {
             const res = await postScheduledPageVideo(
               job.targetPageId,

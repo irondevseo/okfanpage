@@ -7,10 +7,16 @@ import { VitePlugin } from '@electron-forge/plugin-vite';
 import { FusesPlugin } from '@electron-forge/plugin-fuses';
 import { FuseV1Options, FuseVersion } from '@electron/fuses';
 
+/** electron-packager hỗ trợ asarUnpack; kiểu Forge có thể chưa khai báo. */
+const packagerExtras = {
+  asarUnpack: '**/node_modules/ffmpeg-static/**',
+} as Record<string, unknown>;
+
 const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
-  },
+    ...packagerExtras,
+  } as ForgeConfig['packagerConfig'],
   rebuildConfig: {},
   makers: [
     new MakerSquirrel({}),

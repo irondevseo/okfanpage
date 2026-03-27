@@ -1,6 +1,7 @@
 import { MemoryRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { OpenRouterSettingsPanel } from '../components/settings/OpenRouterSettingsPanel';
 import { PromptContentSettingsPanel } from '../components/settings/PromptContentSettingsPanel';
+import { ReupRemixSettingsPanel } from '../components/settings/ReupRemixSettingsPanel';
 import { AppLayout } from '../components/AppLayout';
 import { RequireAuth } from '../components/RequireAuth';
 import { HomePage } from '../pages/HomePage';
@@ -21,6 +22,7 @@ export function AppRouter() {
               <Route index element={<Navigate to="api-ai" replace />} />
               <Route path="api-ai" element={<OpenRouterSettingsPanel />} />
               <Route path="prompt-content" element={<PromptContentSettingsPanel />} />
+              <Route path="reup-remix" element={<ReupRemixSettingsPanel />} />
             </Route>
           </Route>
         </Route>

@@ -11,6 +11,8 @@ import type {
   ListOpenRouterModelsResult,
   OpenRouterPublicSettings,
   OpenRouterSetPayload,
+  ReupRemixPublicSettings,
+  ReupRemixSetPayload,
 } from './shared/settings-types';
 import type {
   ReupFetchSourcesResult,
@@ -53,6 +55,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
       payload: ContentPromptSetPayload,
     ): Promise<ContentPromptPublicSettings> =>
       ipcRenderer.invoke('settings:setContentPrompt', payload),
+    getReupRemix: (): Promise<ReupRemixPublicSettings> =>
+      ipcRenderer.invoke('settings:getReupRemix'),
+    setReupRemix: (
+      payload: ReupRemixSetPayload,
+    ): Promise<ReupRemixPublicSettings> =>
+      ipcRenderer.invoke('settings:setReupRemix', payload),
+    pickLogoFile: (): Promise<string | null> =>
+      ipcRenderer.invoke('settings:pickLogoFile'),
   },
   openrouter: {
     listModels: (apiKey?: string): Promise<ListOpenRouterModelsResult> =>

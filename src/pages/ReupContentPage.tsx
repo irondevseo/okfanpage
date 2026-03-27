@@ -1,4 +1,4 @@
-import { FormEvent, useCallback, useMemo, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { useFanPages } from '../context/FanPagesContext';
 import { useSettings } from '../context/SettingsContext';
 import { buildReupJobs, parseTimeSlotsInput } from '../helpers/reupSchedule';
@@ -14,7 +14,10 @@ import {
   reupScheduleVideos,
   subscribeReupScheduleProgress,
 } from '../services/reupClient';
-import { settingsGetContentPrompt } from '../services/settingsClient';
+import {
+  settingsGetContentPrompt,
+  settingsGetReupRemix,
+} from '../services/settingsClient';
 
 function videoKey(v: ReupVideoDTO): string {
   return `${v.sourcePageId}_${v.id}`;
@@ -59,8 +62,16 @@ export function ReupContentPage() {
   const [scheduleLog, setScheduleLog] = useState<string | null>(null);
   const [scheduleProgress, setScheduleProgress] =
     useState<ReupScheduleProgressPayload | null>(null);
+  const [remixPipelineOn, setRemixPipelineOn] = useState(false);
 
   const [previewKey, setPreviewKey] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (step !== 4) {
+      return;
+    }
+    void settingsGetReupRemix().then((r) => setRemixPipelineOn(r.enabled));
+  }, [step]);
 
   const onFetch = async (e: FormEvent) => {
     e.preventDefault();
@@ -275,7 +286,7 @@ export function ReupContentPage() {
     : null;
 
   return (
-    <div className="flex w-full min-w-0 flex-1 flex-col gap-8">
+    <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col gap-8 overflow-y-auto">
       <div>
         <h1 className="text-2xl font-semibold text-white">Reup video hàng loạt</h1>
         <p className="mt-2 max-w-4xl text-sm text-slate-400">
@@ -544,6 +555,18 @@ export function ReupContentPage() {
               ← Page đích
             </button>
           </div>
+          {remixPipelineOn && (
+            <div
+              className="rounded-xl border border-amber-500/35 bg-amber-500/10 px-4 py-3 text-sm text-amber-100/90"
+              role="status"
+            >
+              <strong className="font-medium text-amber-200">Remix FFmpeg đang bật</strong>
+              <p className="mt-1 text-xs leading-relaxed text-amber-100/75">
+                Mỗi video sẽ được tải về máy, xử lý rồi đăng bằng file (multipart). Chậm hơn đăng
+                trực tiếp bằng URL; song song tối đa 2 job. Cấu hình tại Cài đặt → Remix video.
+              </p>
+            </div>
+          )}
           <div>
             <label className="block text-xs font-medium uppercase tracking-wider text-slate-500">
               Khung giờ trong ngày (local)

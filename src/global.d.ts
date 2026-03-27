@@ -17,6 +17,8 @@ import type {
   ListOpenRouterModelsResult,
   OpenRouterPublicSettings,
   OpenRouterSetPayload,
+  ReupRemixPublicSettings,
+  ReupRemixSetPayload,
 } from './shared/settings-types';
 
 declare global {
@@ -44,6 +46,11 @@ declare global {
         setContentPrompt: (
           payload: ContentPromptSetPayload,
         ) => Promise<ContentPromptPublicSettings>;
+        getReupRemix: () => Promise<ReupRemixPublicSettings>;
+        setReupRemix: (
+          payload: ReupRemixSetPayload,
+        ) => Promise<ReupRemixPublicSettings>;
+        pickLogoFile: () => Promise<string | null>;
       };
       openrouter: {
         listModels: (apiKey?: string) => Promise<ListOpenRouterModelsResult>;
