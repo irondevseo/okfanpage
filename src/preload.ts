@@ -1,5 +1,9 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import type { AuthResult, FacebookRequestAuthResult } from './shared/auth-types';
+import type {
+  AuthResult,
+  FacebookRequestAuthResult,
+  ViaProfileSummary,
+} from './shared/auth-types';
 import type { ListFanPagesResult } from './shared/fanpage-types';
 import type {
   ContentPromptPublicSettings,
@@ -25,6 +29,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
     validate: (): Promise<AuthResult> => ipcRenderer.invoke('auth:validate'),
     getFacebookRequestAuth: (): Promise<FacebookRequestAuthResult> =>
       ipcRenderer.invoke('auth:getFacebookRequestAuth'),
+    listViaProfiles: (): Promise<ViaProfileSummary[]> =>
+      ipcRenderer.invoke('auth:listViaProfiles'),
+    switchVia: (viaId: string): Promise<AuthResult> =>
+      ipcRenderer.invoke('auth:switchVia', viaId),
+    deleteVia: (viaId: string): Promise<void> =>
+      ipcRenderer.invoke('auth:deleteVia', viaId),
   },
   facebook: {
     listManagedPages: (): Promise<ListFanPagesResult> =>

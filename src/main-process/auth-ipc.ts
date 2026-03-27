@@ -2,6 +2,7 @@ import { ipcMain } from 'electron';
 import type {
   AuthResult,
   FacebookRequestAuthResult,
+  ViaProfileSummary,
 } from '../shared/auth-types';
 import type { ListFanPagesResult } from '../shared/fanpage-types';
 import { logAuthAxiosError } from './auth-logger';
@@ -13,36 +14,47 @@ import {
   normalizeFacebookCookieString,
   profileFromCookies,
 } from './facebook-auth';
-import { createTypedStore } from './typed-store';
-
-const STORE_KEY = 'facebookCookies' as const;
-
-type StoreSchema = {
-  [STORE_KEY]?: string;
-};
-
-const store = createTypedStore<StoreSchema>({
-  name: 'okfanpage-auth',
-  defaults: {},
-});
-
-function getStoredCookies(): string | undefined {
-  const v = store.get(STORE_KEY);
-  return typeof v === 'string' && v.trim() ? v.trim() : undefined;
-}
+import {
+  clearActiveSession,
+  getActiveCookies,
+  getActiveViaId,
+  getViaCookies,
+  hasAnyViaProfiles,
+  listViaSummaries,
+  migrateLegacyFacebookCookies,
+  removeViaProfile,
+  setActiveViaId,
+  updateViaLabel,
+  upsertViaAfterValidLogin,
+} from './via-store';
 
 export function getStoredFacebookCookies(): string | undefined {
-  return getStoredCookies();
+  migrateLegacyFacebookCookies();
+  return getActiveCookies();
 }
 
-async function tryProfileFromStoredCookies(): Promise<AuthResult> {
-  const cookies = getStoredCookies();
+async function tryProfileFromActiveVia(): Promise<AuthResult> {
+  migrateLegacyFacebookCookies();
+  const cookies = getActiveCookies();
+  const activeId = getActiveViaId();
+
   if (!cookies) {
+    if (hasAnyViaProfiles()) {
+      return {
+        ok: false,
+        code: 'NO_COOKIE',
+        message: 'Chọn một via đã lưu hoặc dán cookie mới để đăng nhập.',
+        hasSavedVias: true,
+      };
+    }
     return { ok: false, code: 'NO_COOKIE' };
   }
 
   try {
     const profile = await profileFromCookies(cookies);
+    if (activeId) {
+      updateViaLabel(activeId, profile);
+    }
     return { ok: true, profile };
   } catch (err) {
     logAuthAxiosError('auth:restore', err);
@@ -56,11 +68,17 @@ async function tryProfileFromStoredCookies(): Promise<AuthResult> {
       };
     }
     if (isInvalidFacebookSession(err)) {
-      store.delete(STORE_KEY);
+      if (activeId) {
+        removeViaProfile(activeId);
+      }
       return {
         ok: false,
         code: 'INVALID',
-        message: err instanceof Error ? err.message : 'Phiên đăng nhập không hợp lệ.',
+        message:
+          err instanceof Error
+            ? err.message
+            : 'Phiên đăng nhập không hợp lệ — via đã được gỡ.',
+        hasSavedVias: hasAnyViaProfiles(),
       };
     }
     return {
@@ -76,8 +94,64 @@ async function tryProfileFromStoredCookies(): Promise<AuthResult> {
 }
 
 export function registerAuthIpc(): void {
+  ipcMain.handle('auth:listViaProfiles', async (): Promise<ViaProfileSummary[]> => {
+    return listViaSummaries();
+  });
+
+  ipcMain.handle(
+    'auth:switchVia',
+    async (_e, viaId: string): Promise<AuthResult> => {
+      const id = typeof viaId === 'string' ? viaId.trim() : '';
+      if (!id) {
+        return { ok: false, code: 'INVALID', message: 'Chưa chọn via.' };
+      }
+      const cookies = getViaCookies(id);
+      if (!cookies) {
+        return { ok: false, code: 'INVALID', message: 'Không tìm thấy via.' };
+      }
+      setActiveViaId(id);
+      try {
+        const profile = await profileFromCookies(cookies);
+        updateViaLabel(id, profile);
+        return { ok: true, profile };
+      } catch (err) {
+        logAuthAxiosError('auth:switchVia', err);
+        if (isLikelyNetworkError(err)) {
+          return {
+            ok: false,
+            code: 'NETWORK',
+            message: 'Lỗi mạng. Kiểm tra kết nối và thử lại.',
+          };
+        }
+        if (isInvalidFacebookSession(err)) {
+          removeViaProfile(id);
+          return {
+            ok: false,
+            code: 'INVALID',
+            message:
+              'Cookie via này không còn hiệu lực — đã xóa khỏi danh sách.',
+            hasSavedVias: hasAnyViaProfiles(),
+          };
+        }
+        return {
+          ok: false,
+          code: 'INVALID',
+          message:
+            err instanceof Error ? err.message : 'Không đăng nhập được via này.',
+        };
+      }
+    },
+  );
+
+  ipcMain.handle('auth:deleteVia', async (_e, viaId: string): Promise<void> => {
+    const id = typeof viaId === 'string' ? viaId.trim() : '';
+    if (id) {
+      removeViaProfile(id);
+    }
+  });
+
   ipcMain.handle('auth:restore', async (): Promise<AuthResult> => {
-    return tryProfileFromStoredCookies();
+    return tryProfileFromActiveVia();
   });
 
   ipcMain.handle('auth:login', async (_e, cookies: string): Promise<AuthResult> => {
@@ -90,7 +164,7 @@ export function registerAuthIpc(): void {
 
     try {
       const profile = await profileFromCookies(normalized);
-      store.set(STORE_KEY, normalized);
+      upsertViaAfterValidLogin(normalized, profile);
       return { ok: true, profile };
     } catch (err) {
       logAuthAxiosError('auth:login', err);
@@ -110,17 +184,18 @@ export function registerAuthIpc(): void {
   });
 
   ipcMain.handle('auth:logout', async () => {
-    store.delete(STORE_KEY);
+    clearActiveSession();
   });
 
   ipcMain.handle('auth:validate', async (): Promise<AuthResult> => {
-    return tryProfileFromStoredCookies();
+    return tryProfileFromActiveVia();
   });
 
   ipcMain.handle(
     'auth:getFacebookRequestAuth',
     async (): Promise<FacebookRequestAuthResult> => {
-      const cookies = getStoredCookies();
+      const cookies = getActiveCookies();
+      const activeId = getActiveViaId();
       if (!cookies) {
         return { ok: false, code: 'NO_COOKIE' };
       }
@@ -146,7 +221,9 @@ export function registerAuthIpc(): void {
           };
         }
         if (isInvalidFacebookSession(err)) {
-          store.delete(STORE_KEY);
+          if (activeId) {
+            removeViaProfile(activeId);
+          }
           return {
             ok: false,
             code: 'INVALID',
@@ -165,7 +242,8 @@ export function registerAuthIpc(): void {
   ipcMain.handle(
     'facebook:listManagedPages',
     async (): Promise<ListFanPagesResult> => {
-      const cookies = getStoredCookies();
+      const cookies = getActiveCookies();
+      const activeId = getActiveViaId();
       if (!cookies) {
         return { ok: false, code: 'NO_COOKIE' };
       }
@@ -183,7 +261,9 @@ export function registerAuthIpc(): void {
           };
         }
         if (isInvalidFacebookSession(err)) {
-          store.delete(STORE_KEY);
+          if (activeId) {
+            removeViaProfile(activeId);
+          }
           return {
             ok: false,
             code: 'INVALID',

@@ -1,4 +1,8 @@
-import type { AuthResult, FacebookRequestAuthResult } from '../shared/auth-types';
+import type {
+  AuthResult,
+  FacebookRequestAuthResult,
+  ViaProfileSummary,
+} from '../shared/auth-types';
 
 function api() {
   if (typeof window === 'undefined' || !window.electronAPI) {
@@ -25,4 +29,16 @@ export async function authValidate(): Promise<AuthResult> {
 
 export async function authGetFacebookRequestAuth(): Promise<FacebookRequestAuthResult> {
   return api().auth.getFacebookRequestAuth();
+}
+
+export async function authListViaProfiles(): Promise<ViaProfileSummary[]> {
+  return api().auth.listViaProfiles();
+}
+
+export async function authSwitchVia(viaId: string): Promise<AuthResult> {
+  return api().auth.switchVia(viaId);
+}
+
+export async function authDeleteVia(viaId: string): Promise<void> {
+  return api().auth.deleteVia(viaId);
 }

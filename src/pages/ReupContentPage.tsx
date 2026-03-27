@@ -312,7 +312,7 @@ export function ReupContentPage() {
             value={linksText}
             onChange={(e) => setLinksText(e.target.value)}
             rows={10}
-            placeholder="https://www.facebook.com/DreamPCSetups&#10;https://www.facebook.com/profile.php?id=61577182277706"
+            placeholder="https://www.facebook.com/vnexpress&#10;https://www.facebook.com/profile.php?id=61577182247284"
             className="w-full rounded-xl border border-slate-700 bg-slate-950/80 px-4 py-3 font-mono text-sm text-slate-100 placeholder:text-slate-600 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
           {fetchError && (

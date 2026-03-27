@@ -1,4 +1,8 @@
-import type { AuthResult, FacebookRequestAuthResult } from './shared/auth-types';
+import type {
+  AuthResult,
+  FacebookRequestAuthResult,
+  ViaProfileSummary,
+} from './shared/auth-types';
 import type { ListFanPagesResult } from './shared/fanpage-types';
 import type {
   ReupFetchSourcesResult,
@@ -24,6 +28,9 @@ declare global {
         logout: () => Promise<void>;
         validate: () => Promise<AuthResult>;
         getFacebookRequestAuth: () => Promise<FacebookRequestAuthResult>;
+        listViaProfiles: () => Promise<ViaProfileSummary[]>;
+        switchVia: (viaId: string) => Promise<AuthResult>;
+        deleteVia: (viaId: string) => Promise<void>;
       };
       facebook: {
         listManagedPages: () => Promise<ListFanPagesResult>;
