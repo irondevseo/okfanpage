@@ -45,6 +45,7 @@ export type ReupRewriteResult =
 
 export type ReupScheduleJobPayload = {
   targetPageId: string;
+  targetPageName?: string;
   pageAccessToken: string;
   fileUrl: string;
   description: string;

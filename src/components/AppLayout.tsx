@@ -62,6 +62,19 @@ export function AppLayout() {
               Tải video
             </NavLink>
             <NavLink
+              to="/post-history"
+              className={({ isActive }) =>
+                [
+                  'rounded-lg px-3 py-1.5 text-xs font-medium transition',
+                  isActive
+                    ? 'bg-slate-800 text-white'
+                    : 'text-slate-500 hover:bg-slate-800/50 hover:text-slate-300',
+                ].join(' ')
+              }
+            >
+              Lịch sử
+            </NavLink>
+            <NavLink
               to="/competitor"
               className={({ isActive }) =>
                 [

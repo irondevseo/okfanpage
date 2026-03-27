@@ -255,9 +255,14 @@ export function ReupContentPage() {
       fileUrls: withSource.map(({ url }) => url),
       minLeadSeconds: 600,
     });
+    const pageNameById: Record<string, string> = {};
+    for (const p of pages) {
+      pageNameById[p.id] = p.name;
+    }
     const payload = jobs.map((j) => ({
       videoKey: j.videoKey,
       targetPageId: j.targetPageId,
+      targetPageName: pageNameById[j.targetPageId] ?? j.targetPageId,
       pageAccessToken: j.pageAccessToken,
       fileUrl: j.fileUrl,
       description: j.description,

@@ -33,6 +33,11 @@ import type {
   DownloadRequest,
   DownloadStartResult,
 } from './shared/downloader-types';
+import type {
+  PostHistoryFilter,
+  PostHistoryListResult,
+  PostHistoryStats,
+} from './shared/post-history-types';
 
 contextBridge.exposeInMainWorld('electronAPI', {
   auth: {
@@ -145,5 +150,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
         ipcRenderer.removeListener(channel, handler);
       };
     },
+  },
+  postHistory: {
+    list: (filter: PostHistoryFilter): Promise<PostHistoryListResult> =>
+      ipcRenderer.invoke('postHistory:list', filter),
+    stats: (): Promise<PostHistoryStats> =>
+      ipcRenderer.invoke('postHistory:stats'),
+    delete: (id: string): Promise<boolean> =>
+      ipcRenderer.invoke('postHistory:delete', id),
+    clear: (pageId?: string): Promise<number> =>
+      ipcRenderer.invoke('postHistory:clear', pageId),
   },
 });

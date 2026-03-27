@@ -4,6 +4,7 @@ import started from 'electron-squirrel-startup';
 import { registerAuthIpc } from './main-process/auth-ipc';
 import { registerCompetitorIpc } from './main-process/competitor-ipc';
 import { registerDownloaderIpc } from './main-process/downloader-ipc';
+import { registerPostHistoryIpc } from './main-process/post-history-ipc';
 import { registerReupIpc } from './main-process/reup-ipc';
 import { registerSettingsIpc } from './main-process/settings-ipc';
 
@@ -49,6 +50,7 @@ app.whenReady().then(() => {
   registerCompetitorIpc();
   registerReupIpc();
   registerDownloaderIpc();
+  registerPostHistoryIpc();
   createWindow();
 });
 

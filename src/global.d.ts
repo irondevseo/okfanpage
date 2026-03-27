@@ -24,6 +24,11 @@ import type {
   DownloadStartResult,
 } from './shared/downloader-types';
 import type {
+  PostHistoryFilter,
+  PostHistoryListResult,
+  PostHistoryStats,
+} from './shared/post-history-types';
+import type {
   ContentPromptPublicSettings,
   ContentPromptSetPayload,
   ListOpenRouterModelsResult,
@@ -96,6 +101,12 @@ declare global {
         onProgress: (
           cb: (payload: DownloadProgressPayload) => void,
         ) => () => void;
+      };
+      postHistory: {
+        list: (filter: PostHistoryFilter) => Promise<PostHistoryListResult>;
+        stats: () => Promise<PostHistoryStats>;
+        delete: (id: string) => Promise<boolean>;
+        clear: (pageId?: string) => Promise<number>;
       };
     };
   }

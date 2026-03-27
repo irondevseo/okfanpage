@@ -8,6 +8,7 @@ import { CompetitorAnalysisPage } from '../pages/CompetitorAnalysisPage';
 import { DownloaderPage } from '../pages/DownloaderPage';
 import { HomePage } from '../pages/HomePage';
 import { LoginPage } from '../pages/LoginPage';
+import { PostHistoryPage } from '../pages/PostHistoryPage';
 import { ReupContentPage } from '../pages/ReupContentPage';
 import { SettingsPage } from '../pages/SettingsPage';
 
@@ -21,6 +22,7 @@ export function AppRouter() {
             <Route path="/" element={<HomePage />} />
             <Route path="/reup" element={<ReupContentPage />} />
             <Route path="/downloader" element={<DownloaderPage />} />
+            <Route path="/post-history" element={<PostHistoryPage />} />
             <Route path="/competitor" element={<CompetitorAnalysisPage />} />
             <Route path="/settings" element={<SettingsPage />}>
               <Route index element={<Navigate to="api-ai" replace />} />

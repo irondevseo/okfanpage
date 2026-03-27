@@ -34,6 +34,7 @@ import {
 } from './reup-batch-config';
 import { downloadVideoToFile } from './reup-download';
 import { remixVideoWithFfmpeg } from './reup-ffmpeg-remix';
+import { addPostHistoryEntry } from './post-history-store';
 import { getReupRemixSettings } from './settings-store';
 
 export function registerReupIpc(): void {
@@ -283,6 +284,17 @@ export function registerReupIpc(): void {
         } else {
           failCount += 1;
         }
+
+        addPostHistoryEntry({
+          pageId: job.targetPageId,
+          pageName: job.targetPageName ?? job.targetPageId,
+          description: job.description ?? '',
+          scheduledAt: job.scheduledPublishTime,
+          status: row.ok ? 'scheduled' : 'failed',
+          fbPostId: row.ok ? row.postId : undefined,
+          errorMessage: row.ok === false ? row.message : undefined,
+          sourceVideoKey: job.videoKey,
+        });
 
         sendProgress({
           completed,
