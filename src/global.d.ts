@@ -5,6 +5,12 @@ import type {
 } from './shared/auth-types';
 import type { ListFanPagesResult } from './shared/fanpage-types';
 import type {
+  CompetitorAnalyzePayload,
+  CompetitorAnalyzeResult,
+  CompetitorFetchPostsPayload,
+  CompetitorFetchPostsResult,
+} from './shared/competitor-analysis-types';
+import type {
   ReupFetchSourcesResult,
   ReupRewriteResult,
   ReupScheduleBatchResult,
@@ -54,6 +60,12 @@ declare global {
       };
       openrouter: {
         listModels: (apiKey?: string) => Promise<ListOpenRouterModelsResult>;
+      };
+      competitor: {
+        fetchPosts: (
+          payload: CompetitorFetchPostsPayload,
+        ) => Promise<CompetitorFetchPostsResult>;
+        analyze: (payload: CompetitorAnalyzePayload) => Promise<CompetitorAnalyzeResult>;
       };
       reup: {
         fetchSources: (text: string) => Promise<ReupFetchSourcesResult>;

@@ -15,6 +15,12 @@ import type {
   ReupRemixSetPayload,
 } from './shared/settings-types';
 import type {
+  CompetitorAnalyzePayload,
+  CompetitorAnalyzeResult,
+  CompetitorFetchPostsPayload,
+  CompetitorFetchPostsResult,
+} from './shared/competitor-analysis-types';
+import type {
   ReupFetchSourcesResult,
   ReupRewriteResult,
   ReupScheduleBatchResult,
@@ -67,6 +73,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openrouter: {
     listModels: (apiKey?: string): Promise<ListOpenRouterModelsResult> =>
       ipcRenderer.invoke('openrouter:listModels', apiKey),
+  },
+  competitor: {
+    fetchPosts: (
+      payload: CompetitorFetchPostsPayload,
+    ): Promise<CompetitorFetchPostsResult> =>
+      ipcRenderer.invoke('competitor:fetchPosts', payload),
+    analyze: (payload: CompetitorAnalyzePayload): Promise<CompetitorAnalyzeResult> =>
+      ipcRenderer.invoke('competitor:analyze', payload),
   },
   reup: {
     fetchSources: (text: string): Promise<ReupFetchSourcesResult> =>

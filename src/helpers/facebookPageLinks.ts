@@ -2,11 +2,31 @@ export type ParsedPageRef =
   | { kind: 'id'; value: string; rawUrl: string }
   | { kind: 'username'; value: string; rawUrl: string };
 
+/** Chuẩn hóa URL để `new URL()` parse được (nhiều user dán thiếu https://). */
+export function normalizeFacebookUrlInput(raw: string): string {
+  const t = raw.trim();
+  if (!t) {
+    return t;
+  }
+  try {
+    new URL(t);
+    return t;
+  } catch {
+    const withProto = t.startsWith('//') ? `https:${t}` : `https://${t}`;
+    try {
+      new URL(withProto);
+      return withProto;
+    } catch {
+      return t;
+    }
+  }
+}
+
 /**
  * Trích username hoặc id Page từ dòng URL Facebook.
  */
 export function parseFacebookPageUrlLine(line: string): ParsedPageRef | null {
-  const trimmed = line.trim();
+  const trimmed = normalizeFacebookUrlInput(line);
   if (!trimmed) {
     return null;
   }

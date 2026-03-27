@@ -2,6 +2,7 @@ import { app, BrowserWindow } from 'electron';
 import path from 'node:path';
 import started from 'electron-squirrel-startup';
 import { registerAuthIpc } from './main-process/auth-ipc';
+import { registerCompetitorIpc } from './main-process/competitor-ipc';
 import { registerReupIpc } from './main-process/reup-ipc';
 import { registerSettingsIpc } from './main-process/settings-ipc';
 
@@ -44,6 +45,7 @@ const createWindow = () => {
 app.whenReady().then(() => {
   registerAuthIpc();
   registerSettingsIpc();
+  registerCompetitorIpc();
   registerReupIpc();
   createWindow();
 });
