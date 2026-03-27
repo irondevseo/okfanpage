@@ -87,36 +87,90 @@ export type BuiltReupJob = {
   fileUrl: string;
   description: string;
   scheduledPublishTime: number;
+  /**
+   * true khi video này lặp lại trên cùng page (vượt quá số video gốc).
+   * Frontend dùng flag này để gọi AI viết lại description trước khi đăng.
+   */
+  isDuplicate: boolean;
+};
+
+export type SchedulePlan = {
+  jobs: BuiltReupJob[];
+  totalDays: number;
+  slotsPerDay: number;
+  slotsPerPage: number;
+  uniquePerPage: number;
+  duplicatesPerPage: number;
+  totalJobs: number;
+  totalDuplicates: number;
 };
 
 /**
- * Video thứ i → page (i % M), thời gian là mốc thứ i theo thứ tự khung giờ trong ngày.
+ * Phân bổ per-page, full-day:
+ * - Mỗi page nhận đủ S bài/ngày (S = số khung giờ), không có ngày lẻ.
+ * - Số ngày = ceil(V / S) để mỗi video gốc xuất hiện ít nhất 1 lần.
+ * - Video xoay vòng (cycle) khi hết; mỗi page bắt đầu lệch 1 video để tránh cùng nội dung cùng lúc.
+ * - Bài lặp (isDuplicate=true) nên được AI viết lại description.
  */
-export function buildReupJobs(input: ReupScheduleInput): BuiltReupJob[] {
-  const M = input.targetPageIds.length;
-  if (M === 0 || input.slots.length === 0) {
-    return [];
+export function buildReupJobs(input: ReupScheduleInput): SchedulePlan {
+  const P = input.targetPageIds.length;
+  const S = input.slots.length;
+  const V = input.videoKeys.length;
+
+  if (P === 0 || S === 0 || V === 0) {
+    return {
+      jobs: [],
+      totalDays: 0,
+      slotsPerDay: S,
+      slotsPerPage: 0,
+      uniquePerPage: 0,
+      duplicatesPerPage: 0,
+      totalJobs: 0,
+      totalDuplicates: 0,
+    };
   }
-  const n = input.videoKeys.length;
+
+  const D = Math.ceil(V / S);
+  const slotsPerPage = D * S;
+  const duplicatesPerPage = slotsPerPage - V;
+
   const lead = input.minLeadSeconds ?? 600;
   const minUnix = Math.floor(Date.now() / 1000) + lead;
-  const times = allocateScheduleTimes(n, input.slots, minUnix);
+
   const jobs: BuiltReupJob[] = [];
-  for (let i = 0; i < n; i++) {
-    const pageIdx = i % M;
-    const targetPageId = input.targetPageIds[pageIdx];
-    const token = input.pageTokensById[targetPageId];
-    if (!token || !times[i]) {
-      continue;
+
+  for (let p = 0; p < P; p++) {
+    const pageId = input.targetPageIds[p];
+    const token = input.pageTokensById[pageId];
+    if (!token) continue;
+
+    const times = allocateScheduleTimes(slotsPerPage, input.slots, minUnix);
+
+    for (let i = 0; i < slotsPerPage; i++) {
+      if (!times[i]) continue;
+      const videoIdx = (p + i) % V;
+      jobs.push({
+        videoKey: input.videoKeys[videoIdx],
+        targetPageId: pageId,
+        pageAccessToken: token,
+        fileUrl: input.fileUrls[videoIdx],
+        description: input.descriptions[videoIdx],
+        scheduledPublishTime: times[i],
+        isDuplicate: i >= V,
+      });
     }
-    jobs.push({
-      videoKey: input.videoKeys[i],
-      targetPageId,
-      pageAccessToken: token,
-      fileUrl: input.fileUrls[i],
-      description: input.descriptions[i] ?? '',
-      scheduledPublishTime: times[i],
-    });
   }
-  return jobs;
+
+  const totalDuplicates = jobs.filter((j) => j.isDuplicate).length;
+
+  return {
+    jobs,
+    totalDays: D,
+    slotsPerDay: S,
+    slotsPerPage,
+    uniquePerPage: V,
+    duplicatesPerPage,
+    totalJobs: jobs.length,
+    totalDuplicates,
+  };
 }

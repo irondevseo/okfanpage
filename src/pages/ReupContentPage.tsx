@@ -1,7 +1,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { useFanPages } from '../context/FanPagesContext';
 import { useSettings } from '../context/SettingsContext';
-import { buildReupJobs, parseTimeSlotsInput } from '../helpers/reupSchedule';
+import { buildReupJobs, parseTimeSlotsInput, type SchedulePlan } from '../helpers/reupSchedule';
 import type {
   ReupFetchPageResult,
   ReupScheduleJobErr,
@@ -58,6 +58,7 @@ export function ReupContentPage() {
 
   const [slotsText, setSlotsText] = useState('7:00\n12:00\n15:00\n20:00');
   const [rewriteLoading, setRewriteLoading] = useState(false);
+  const [rewriteFailedKeys, setRewriteFailedKeys] = useState<string[]>([]);
   const [scheduleLoading, setScheduleLoading] = useState(false);
   const [scheduleLog, setScheduleLog] = useState<string | null>(null);
   const [scheduleProgress, setScheduleProgress] =
@@ -65,6 +66,8 @@ export function ReupContentPage() {
   const [remixPipelineOn, setRemixPipelineOn] = useState(false);
 
   const [previewKey, setPreviewKey] = useState<string | null>(null);
+  const [schedulePlan, setSchedulePlan] = useState<SchedulePlan | null>(null);
+  const [rewriteDuplicatesLoading, setRewriteDuplicatesLoading] = useState(false);
 
   useEffect(() => {
     if (step !== 4) {
@@ -165,10 +168,8 @@ export function ReupContentPage() {
     setStep(4);
   };
 
-  const onRewrite = useCallback(async () => {
-    if (selectedKeys.size === 0) {
-      return;
-    }
+  const doRewrite = useCallback(async (keys: string[]) => {
+    if (keys.length === 0) return;
     const cp = await settingsGetContentPrompt();
     if (!cp.hasPrompt) {
       setScheduleLog('Chưa có prompt nội dung — vào Cài đặt → Prompt nội dung.');
@@ -180,14 +181,13 @@ export function ReupContentPage() {
     }
     setRewriteLoading(true);
     setScheduleLog(null);
+    setRewriteFailedKeys([]);
     try {
-      const items = [...selectedKeys].map((k) => ({
-        key: k,
-        text: descByKey[k] ?? '',
-      }));
+      const items = keys.map((k) => ({ key: k, text: descByKey[k] ?? '' }));
       const r = await reupRewriteCaptions(items);
       if (r.ok === false) {
         setScheduleLog(r.message);
+        setRewriteFailedKeys(keys);
         return;
       }
       setDescByKey((prev) => {
@@ -199,6 +199,7 @@ export function ReupContentPage() {
       });
       const fails = r.failed;
       if (fails?.length) {
+        setRewriteFailedKeys(fails.map((f) => f.key));
         const sample = fails
           .slice(0, 3)
           .map((f) => `${f.key}: ${f.message}`)
@@ -207,22 +208,25 @@ export function ReupContentPage() {
           `Đã viết lại ${r.items.length}/${items.length} caption. Lỗi ${fails.length}${sample ? ` — ${sample}` : ''}${fails.length > 3 ? '…' : ''}`,
         );
       } else {
+        setRewriteFailedKeys([]);
         setScheduleLog('Đã viết lại caption bằng AI.');
       }
     } finally {
       setRewriteLoading(false);
     }
-  }, [selectedKeys, descByKey, openRouter?.hasApiKey]);
+  }, [descByKey, openRouter?.hasApiKey]);
 
-  const onSchedule = async (e: FormEvent) => {
-    e.preventDefault();
-    setScheduleLog(null);
-    setScheduleProgress(null);
+  const onRewrite = useCallback(() => {
+    return doRewrite([...selectedKeys]);
+  }, [selectedKeys, doRewrite]);
+
+  const onRetryFailed = useCallback(() => {
+    return doRewrite(rewriteFailedKeys);
+  }, [rewriteFailedKeys, doRewrite]);
+
+  const buildPlan = useCallback((): SchedulePlan | null => {
     const slots = parseTimeSlotsInput(slotsText);
-    if (!slots) {
-      setScheduleLog('Khung giờ không hợp lệ. Dùng dạng 7:00, 12:30 (mỗi dòng hoặc cách nhau bởi dấu phẩy).');
-      return;
-    }
+    if (!slots) return null;
     const selected = flatVideos
       .filter((v) => selectedKeys.has(videoKey(v)))
       .sort((a, b) => videoKey(a).localeCompare(videoKey(b)));
@@ -230,13 +234,7 @@ export function ReupContentPage() {
       v,
       url: v.sourceUrl?.trim() ?? '',
     }));
-    const missing = withSource.filter((x) => !x.url);
-    if (missing.length > 0) {
-      setScheduleLog(
-        `${missing.length} video không có link MP4 (source) — Graph có thể không trả URL; bỏ chọn hoặc thử nguồn khác.`,
-      );
-      return;
-    }
+    if (withSource.some((x) => !x.url)) return null;
     const targetIds = [...targetPageIds];
     const tokens: Record<string, string> = {};
     for (const p of pages) {
@@ -244,7 +242,7 @@ export function ReupContentPage() {
         tokens[p.id] = p.pageAccessToken;
       }
     }
-    const jobs = buildReupJobs({
+    return buildReupJobs({
       videoKeys: withSource.map(({ v }) => videoKey(v)),
       targetPageIds: targetIds,
       pageTokensById: tokens,
@@ -255,11 +253,74 @@ export function ReupContentPage() {
       fileUrls: withSource.map(({ url }) => url),
       minLeadSeconds: 600,
     });
+  }, [slotsText, flatVideos, selectedKeys, targetPageIds, pages, descByKey]);
+
+  useEffect(() => {
+    if (step === 4) setSchedulePlan(buildPlan());
+  }, [step, buildPlan]);
+
+  const onRewriteDuplicates = useCallback(async () => {
+    if (!schedulePlan || schedulePlan.totalDuplicates === 0) return;
+    if (!openRouter?.hasApiKey) {
+      setScheduleLog('Chưa cấu hình OpenRouter API key — không thể viết lại nội dung bản lặp.');
+      return;
+    }
+    const cp = await settingsGetContentPrompt();
+    if (!cp.hasPrompt) {
+      setScheduleLog('Chưa có prompt nội dung — vào Cài đặt → Prompt nội dung.');
+      return;
+    }
+    setRewriteDuplicatesLoading(true);
+    setScheduleLog(null);
+    try {
+      const dupJobs = schedulePlan.jobs.filter((j) => j.isDuplicate);
+      const items = dupJobs.map((j, idx) => ({
+        key: `dup_${idx}`,
+        text: j.description,
+      }));
+      const r = await reupRewriteCaptions(items);
+      if (r.ok === false) {
+        setScheduleLog(`Lỗi viết lại bản lặp: ${r.message}`);
+        return;
+      }
+      const rewritten = new Map(r.items.map((it) => [it.key, it.text]));
+      let applied = 0;
+      const updatedJobs = schedulePlan.jobs.map((j, _idx) => {
+        if (!j.isDuplicate) return j;
+        const dupIdx = schedulePlan.jobs.filter((jj, ii) => jj.isDuplicate && ii <= _idx).length - 1;
+        const key = `dup_${dupIdx}`;
+        const newText = rewritten.get(key);
+        if (newText) {
+          applied++;
+          return { ...j, description: newText, isDuplicate: false };
+        }
+        return j;
+      });
+      setSchedulePlan({ ...schedulePlan, jobs: updatedJobs, totalDuplicates: schedulePlan.totalDuplicates - applied });
+      const failCount = r.failed?.length ?? 0;
+      setScheduleLog(
+        `Đã viết lại ${applied} caption bản lặp.${failCount > 0 ? ` Lỗi ${failCount}.` : ''}`,
+      );
+    } finally {
+      setRewriteDuplicatesLoading(false);
+    }
+  }, [schedulePlan, openRouter?.hasApiKey]);
+
+  const onSchedule = async (e: FormEvent) => {
+    e.preventDefault();
+    const plan = schedulePlan ?? buildPlan();
+    if (!plan || plan.jobs.length === 0) {
+      setScheduleLog('Không có job nào để lên lịch.');
+      return;
+    }
+
+    setScheduleLog(null);
+    setScheduleProgress(null);
     const pageNameById: Record<string, string> = {};
     for (const p of pages) {
       pageNameById[p.id] = p.name;
     }
-    const payload = jobs.map((j) => ({
+    const payload = plan.jobs.map((j) => ({
       videoKey: j.videoKey,
       targetPageId: j.targetPageId,
       targetPageName: pageNameById[j.targetPageId] ?? j.targetPageId,
@@ -583,10 +644,39 @@ export function ReupContentPage() {
               className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-4 py-3 font-mono text-sm text-slate-100 focus:border-blue-500 focus:outline-none"
             />
             <p className="mt-1 text-xs text-slate-600">
-              Video được xếp lần lượt vào các mốc; lặp sang ngày kế khi hết slot trong ngày. Tối
-              thiểu 10 phút sau giờ hiện tại (theo Graph).
+              Mỗi page sẽ đăng đủ {parseTimeSlotsInput(slotsText)?.length ?? '?'} bài/ngày. Video xoay
+              vòng khi hết; bài lặp nên viết lại nội dung AI. Tối thiểu 10 phút sau giờ hiện tại.
             </p>
           </div>
+          {/* Plan summary */}
+          {schedulePlan && schedulePlan.totalJobs > 0 && (
+            <div className="rounded-xl border border-indigo-500/25 bg-indigo-950/20 px-4 py-3">
+              <p className="text-sm font-medium text-indigo-200">Kế hoạch phân bổ</p>
+              <div className="mt-2 grid grid-cols-2 gap-x-6 gap-y-1 text-xs sm:grid-cols-4">
+                <div>
+                  <span className="text-slate-500">Tổng job: </span>
+                  <span className="font-semibold text-white">{schedulePlan.totalJobs}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500">Số ngày: </span>
+                  <span className="font-semibold text-white">{schedulePlan.totalDays}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500">Mỗi page: </span>
+                  <span className="font-semibold text-white">{schedulePlan.slotsPerPage} bài</span>
+                </div>
+                <div>
+                  <span className="text-slate-500">Bài/ngày/page: </span>
+                  <span className="font-semibold text-white">{schedulePlan.slotsPerDay}</span>
+                </div>
+              </div>
+              {schedulePlan.totalDuplicates > 0 && (
+                <p className="mt-2 text-xs text-amber-300/80">
+                  {schedulePlan.totalDuplicates} bài lặp (video tái sử dụng) — nên viết lại nội dung bằng AI trước khi đăng.
+                </p>
+              )}
+            </div>
+          )}
           <div className="flex flex-wrap gap-3">
             <button
               type="button"
@@ -596,6 +686,27 @@ export function ReupContentPage() {
             >
               {rewriteLoading ? 'Đang viết lại…' : 'Viết lại caption (AI)'}
             </button>
+            {rewriteFailedKeys.length > 0 && !rewriteLoading && (
+              <button
+                type="button"
+                onClick={() => void onRetryFailed()}
+                className="rounded-xl border border-amber-500/50 bg-amber-500/10 px-4 py-2 text-sm font-medium text-amber-200 transition hover:bg-amber-500/20"
+              >
+                Viết lại {rewriteFailedKeys.length} caption lỗi
+              </button>
+            )}
+            {schedulePlan && schedulePlan.totalDuplicates > 0 && !rewriteLoading && !rewriteDuplicatesLoading && (
+              <button
+                type="button"
+                onClick={() => void onRewriteDuplicates()}
+                className="rounded-xl border border-cyan-500/50 bg-cyan-500/10 px-4 py-2 text-sm font-medium text-cyan-200 transition hover:bg-cyan-500/20"
+              >
+                Viết lại nội dung {schedulePlan.totalDuplicates} bản lặp (AI)
+              </button>
+            )}
+            {rewriteDuplicatesLoading && (
+              <span className="self-center text-xs text-cyan-400/80">Đang viết lại bản lặp…</span>
+            )}
           </div>
           <form onSubmit={(e) => void onSchedule(e)} className="space-y-4">
             <button
